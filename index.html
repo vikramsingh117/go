@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time WAV to FLAC Converter</title>
+    <style>
+        /* Simple styling */
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #status {
+            margin-top: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-Time WAV to FLAC Converter</h1>
+    <input type="file" id="fileInput" accept=".wav">
+    <button id="startStreaming">Start Streaming</button>
+    <div id="status">Status: Waiting for input...</div>
+
+    <script>
+        document.getElementById("startStreaming").addEventListener("click", function() {
+            const fileInput = document.getElementById("fileInput");
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert("Please select a WAV file to stream.");
+                return;
+            }
+
+            const ws = new WebSocket("ws://localhost:8080/stream");
+
+            ws.onopen = () => {
+                document.getElementById("status").innerText = "Status: Streaming started...";
+                const reader = new FileReader();
+
+                reader.onload = function(event) {
+                    // Send audio data in chunks
+                    ws.send(event.target.result);
+                };
+
+                reader.readAsArrayBuffer(file);
+            };
+
+            ws.onmessage = (event) => {
+                // Handle the received FLAC data (e.g., download or play)
+                const blob = new Blob([event.data], { type: "audio/flac" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "converted.flac";
+                link.click();
+            };
+
+            ws.onclose = () => {
+                document.getElementById("status").innerText = "Status: Streaming ended.";
+            };
+
+            ws.onerror = (error) => {
+                console.error("WebSocket error:", error);
+                document.getElementById("status").innerText = "Status: Error occurred.";
+            };
+        });
+    </script>
+</body>
+</html>
