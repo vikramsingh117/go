@@ -1,76 +1,138 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Real-Time WAV to FLAC Converter</title>
     <style>
-        /* Simple styling */
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-        }
-        #status {
-            margin-top: 20px;
-            font-weight: bold;
-        }
+      /* Simple styling */
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        margin: 0;
+      }
+      #status,
+      #progress,
+      #report {
+        margin-top: 10px;
+        font-weight: bold;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <h1>Real-Time WAV to FLAC Converter</h1>
-    <input type="file" id="fileInput" accept=".wav">
+    <input type="file" id="fileInput" accept=".wav" />
     <button id="startStreaming">Start Streaming</button>
     <div id="status">Status: Waiting for input...</div>
+    <div id="progress">Conversion Progress: 0%</div>
+    <div id="report"></div>
 
     <script>
-        document.getElementById("startStreaming").addEventListener("click", function() {
-            const fileInput = document.getElementById("fileInput");
-            const file = fileInput.files[0];
+        console.log("Script loaded successfully");
 
-            if (!file) {
-                alert("Please select a WAV file to stream.");
-                return;
-            }
+      document
+        .getElementById("startStreaming")
+        .addEventListener("click", function () {
+          const fileInput = document.getElementById("fileInput");
+          const file = fileInput.files[0];
 
-            const ws = new WebSocket("ws://localhost:8080/stream");
+          if (!file) {
+            alert("Please select a WAV file to stream.");
+            return;
+          }
 
+          const startTime = performance.now(); // Start timing
+          const ws = new WebSocket("ws://localhost:8080/stream");
+
+          ws.onopen = () => {
+            document.getElementById("status").innerText =
+              "Status: Streaming started...";
+            const reader = new FileReader();
+            const chunkSize = 64 * 1024; // 64 KB chunks
+            let offset = 0;
+
+            reader.onload = function (event) {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(event.target.result);
+              }
+            };
+
+            const sendChunks = () => {
+              if (offset < file.size) {
+                const chunk = file.slice(offset, offset + chunkSize);
+                reader.readAsArrayBuffer(chunk);
+
+                // Update the progress
+                const progress = Math.min(
+                  100,
+                  ((offset + chunkSize) / file.size) * 100
+                ).toFixed(2);
+                document.getElementById(
+                  "progress"
+                ).innerText = `Conversion Progress: ${progress}%`;
+
+                offset += chunkSize;
+              } else {
+                ws.close();
+              }
+            };
+
+            // Read and send the file in chunks
             ws.onopen = () => {
-                document.getElementById("status").innerText = "Status: Streaming started...";
-                const reader = new FileReader();
-
-                reader.onload = function(event) {
-                    // Send audio data in chunks
-                    ws.send(event.target.result);
-                };
-
-                reader.readAsArrayBuffer(file);
+              sendChunks();
             };
 
-            ws.onmessage = (event) => {
-                // Handle the received FLAC data (e.g., download or play)
-                const blob = new Blob([event.data], { type: "audio/flac" });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = "converted.flac";
-                link.click();
+            reader.onloadend = () => {
+              // Once a chunk is loaded and sent, send the next chunk
+              if (offset < file.size) {
+                sendChunks();
+              } else {
+                document.getElementById("status").innerText =
+                  "Status: Streaming ended.";
+              }
             };
+          };
 
-            ws.onclose = () => {
-                document.getElementById("status").innerText = "Status: Streaming ended.";
-            };
+          ws.onmessage = (event) => {
+            // Handle the received FLAC data (e.g., download or play)
+            const blob = new Blob([event.data], { type: "audio/flac" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "converted.flac";
+            link.click();
 
-            ws.onerror = (error) => {
-                console.error("WebSocket error:", error);
-                document.getElementById("status").innerText = "Status: Error occurred.";
-            };
+            // Calculate the size of the converted file
+            const fileSize = (blob.size / (1024 * 1024)).toFixed(2); // Size in MB
+
+            // Calculate the time taken
+            const endTime = performance.now();
+            const timeTaken = ((endTime - startTime) / 1000).toFixed(2); // Time in seconds
+            console.log(fileSize,timeTaken)
+
+            // Display the report
+            document.getElementById("report").innerText =
+              `Time Taken: ${timeTaken} seconds\n` +
+              `Converted File Size: ${fileSize} MB`;
+          };
+          ws.onopen = () => {
+            console.log("WebSocket connection established.");
+            document.getElementById("status").innerText =
+              "Status: Streaming started...";
+          };
+
+          ws.onmessage = (event) => {
+            console.log("Received FLAC data from backend.");
+            console.log(fileSize,timeTaken)
+            // Your existing code to handle the FLAC data
+          };
         });
     </script>
-</body>
+    
+  </body>
 </html>

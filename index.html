@@ -27,6 +27,7 @@
     <input type="file" id="fileInput" accept=".wav">
     <button id="startStreaming">Start Streaming</button>
     <div id="status">Status: Waiting for input...</div>
+    <div id="conversionTime" style="margin-top: 20px;"></div>
 
     <script>
         document.getElementById("startStreaming").addEventListener("click", function() {
@@ -47,6 +48,7 @@
                 reader.onload = function(event) {
                     // Send audio data in chunks
                     ws.send(event.target.result);
+                    console.log("Sent audio data to the server.");
                 };
 
                 reader.readAsArrayBuffer(file);
@@ -60,6 +62,12 @@
                 link.href = url;
                 link.download = "converted.flac";
                 link.click();
+                console.log("Received and downloaded FLAC data.");
+
+                // Measure and display conversion time
+                const endTime = Date.now();
+                const timeTaken = endTime - startTime; // Start time must be defined in ws.onopen
+                document.getElementById("conversionTime").innerText = `Conversion Time: ${timeTaken} ms`;
             };
 
             ws.onclose = () => {
@@ -70,6 +78,9 @@
                 console.error("WebSocket error:", error);
                 document.getElementById("status").innerText = "Status: Error occurred.";
             };
+
+            // Define the start time
+            const startTime = Date.now();
         });
     </script>
 </body>
